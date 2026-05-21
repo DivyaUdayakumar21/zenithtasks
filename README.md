@@ -153,3 +153,35 @@ Once the backend server is running locally, you can visually explore, interact w
 ```
 
 ```
+Markdown
+---
+
+## Production Scalability Note
+
+To transition this monolithic full-stack application to support high-throughput enterprise traffic (100k+ Daily Active Users), the following cloud architecture strategy should be implemented:
+
+[ Incoming Traffic ]
+│
+▼
+[ Load Balancer ] (Nginx / AWS ALB)
+│
+┌────┴────┐
+▼         ▼
+[App Node 1] [App Node 2]  <--->  [ Redis Cache ] Layer (Sessions & Core Hot Tasks)
+│         │
+└────┬────┘
+▼
+[ Neon PostgreSQL ] DB (1 Primary Master Node + Auto-Scaling Read Replicas)
+
+
+### 1. Database Optimization & Caching (Redis)
+* **Read-Heavy Query Caching:** Task lists rarely change minute-by-minute. Introducing a **Redis** caching layer sitting directly in front of the database ensures that `GET /api/v1/tasks/` requests are served directly from RAM (sub-millisecond latency) rather than querying PostgreSQL every time.
+* **Read Replicas:** Scale the Neon cloud tier by deploying read-only database replicas. All mutation traffic (`POST`, `PATCH`, `DELETE`) targets the primary database node, while read queries are load-balanced across replicas to reduce server strain.
+
+### 2. High Availability & Load Balancing
+* **Horizontal Scaling:** Containerize the Django application completely using the existing `Dockerfile` and deploy it across multiple cloud server clusters (e.g., AWS ECS, DigitalOcean App Platform).
+* **Reverse Proxy:** Position an **Nginx** or AWS Application Load Balancer (ALB) at the edge network gateway to distribute incoming concurrent requests evenly across all active application nodes, preventing any single backend server from becoming a bottleneck.
+
+### 3. Asynchronous Event Architecture (Microservices Transition)
+* **Background Workers:** Time-consuming background operations, such as generating analytical system reports, processing task attachments, or firing email notification triggers, should be unlinked from the core API request-response cycle.
+* **Message Broker:** Introduce **Celery** backed by **RabbitMQ** or **Redis** to pass heavy task
