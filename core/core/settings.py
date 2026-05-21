@@ -11,8 +11,10 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
 from pathlib import Path
+import dj_database_url
+import os
+from datetime import timedelta
 
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
@@ -37,9 +39,18 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+
+    "users",
+    "tasks",
+
+    "rest_framework",
+    "corsheaders",
+    "drf_spectacular",
+
 ]
 
 MIDDLEWARE = [
+    "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -73,10 +84,11 @@ WSGI_APPLICATION = "core.wsgi.application"
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
 DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
-    }
+    'default': dj_database_url.config(
+        default='postgresql://neondb_owner:npg_qSiWa2FlK4Qx@ep-fancy-haze-apomd2ay-pooler.c-7.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require',
+        conn_max_age=600, # Keeps connections alive for better performance
+        ssl_require=True  # CRITICAL: Neon requires encrypted SSL connections
+    )
 }
 
 
@@ -115,3 +127,46 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = "static/"
+AUTH_USER_MODEL = "users.CustomUser"
+
+from datetime import timedelta
+
+# 1. Global Django Rest Framework Configuration
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ),
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.IsAuthenticated', # Protects all endpoints by default
+    ),
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    
+    }
+
+# 2. SimpleJWT Token Lifetime & Security Configuration
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=15),    # Short-lived safety window
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),       # Long-lived persistence
+    'ROTATE_REFRESH_TOKENS': True,                     # Issue a fresh refresh token on every cycle
+    'BLACKLIST_AFTER_ROTATION': True,                  # Old refresh tokens are instantly invalidated
+    
+    # Cookie settings for production hardening
+    'AUTH_COOKIE': 'refresh_token',
+    'AUTH_COOKIE_SECURE': True,                        # Transmit only over HTTPS
+    'AUTH_COOKIE_HTTP_ONLY': True,                      # Blocks JavaScript access entirely
+    'AUTH_COOKIE_SAMESITE': 'Lax',
+}
+
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+
+    
+# NEW: Swagger Dashboard Metadata
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Task Management API',
+    'DESCRIPTION': 'Production-grade API with JWT, RBAC, and Versioning',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+}
